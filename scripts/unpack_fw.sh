@@ -194,15 +194,36 @@ UNPACK_PARTITION()
     LOG_INFO "Extracting $PART_NAME [$FS_TYPE]..."
 
     local MNT=$(mktemp -d)
-    trap 'umount "$MNT" &>/dev/null; rm -rf "$MNT"' RETURN
+    trap 'fusermount -u "$MNT" &>/dev/null || umount "$MNT" &>/dev/null; rm -rf "$MNT"' RETURN
 
 
     case "$FS_TYPE" in
-        "ext4") mount -o ro "$IMAGE_PATH" "$MNT" ;;
-        "erofs") SILENT "$PREBUILTS/erofs-utils/fuse.erofs" "$IMAGE_PATH" "$MNT" ;;
+        "ext4")
+            # Rootless: fuse2fs (FUSE) needs no privileges.
+            # Root fallback: kernel mount when fuse2fs is unavailable.
+            if command -v fuse2fs &>/dev/null; then
+                # fakeroot: pretend to be root for permission checks, so
+                # root-owned entries (e.g. lost+found) copy cleanly as user.
+                fuse2fs -o ro,fakeroot "$IMAGE_PATH" "$MNT" \
+                    || ERROR_EXIT "Failed to mount ext4 image with fuse2fs: $IMAGE_PATH"
+            elif [[ "${EUID:-$(id -u)}" -eq 0 ]]; then
+                mount -o ro "$IMAGE_PATH" "$MNT" \
+                    || ERROR_EXIT "Failed to mount ext4 image: $IMAGE_PATH (install fuse2fs for rootless extraction)"
+            else
+                ERROR_EXIT "Cannot mount ext4 without root: install 'fuse2fs' (e2fsprogs package) for rootless extraction"
+                return 1
+            fi
+            ;;
+        "erofs") "$PREBUILTS/erofs-utils/fuse.erofs" "$IMAGE_PATH" "$MNT" &>/dev/null \
+            || ERROR_EXIT "Failed to mount erofs image: $IMAGE_PATH" ;;
         "f2fs") if ! IS_WSL; then
-                    mount -o ro "$IMAGE_PATH" "$MNT" \
-                        || ERROR_EXIT "Failed to mount f2fs image: $IMAGE_PATH (is the f2fs kernel module loaded?)"
+                    if [[ "${EUID:-$(id -u)}" -eq 0 ]]; then
+                        mount -o ro "$IMAGE_PATH" "$MNT" \
+                            || ERROR_EXIT "Failed to mount f2fs image: $IMAGE_PATH (is the f2fs kernel module loaded?)"
+                    else
+                        ERROR_EXIT "Cannot mount f2fs without root: no rootless f2fs extractor available"
+                        return 1
+                    fi
                 fi ;;
         *)      ERROR_EXIT "Unsupported filesystem: $FS_TYPE"; return 1 ;;
     esac

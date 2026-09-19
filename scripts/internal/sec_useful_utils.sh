@@ -77,7 +77,7 @@ EXTRACT_FROM_APEX_PAYLOAD() {
 
     local APEX_FILE="${WORKSPACE}/${APEX_FILE_NAME}"
     local OUT_DIR="${WORKSPACE}/${OUT}"
-    local TMP_DIR="/tmp/apex_extract_$$"
+    local TMP_DIR="${TMPDIR:-/tmp}/apex_extract_$$"
 
 
     if [[ -f "$OUT_DIR" ]]; then

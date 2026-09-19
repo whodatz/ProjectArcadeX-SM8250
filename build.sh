@@ -290,9 +290,12 @@ AstroROM Build Tool v${ROM_VERSION}
 Copyright (c) 2025 Sameer Al Sahab
 
 USAGE:
- sudo ./build.sh [options] [command] [device:-optional]
-  or
- sudo bash build.sh [options] [command] [device-optional]
+  ./build.sh [options] [command] [device:-optional]
+   or
+  bash build.sh [options] [command] [device-optional]
+
+  No root required. Run as a regular user. For ext4 images install
+  'fuse2fs' (e2fsprogs package) to enable rootless extraction.
 
 COMMANDS:
   -b, --build [device]      Build ROM for a specific device.
@@ -315,14 +318,11 @@ AVAILABLE OBJECTIVES:
 
 
 EXAMPLES:
-  sudo ./build.sh build x1q
-  sudo ./build.sh b
-  sudo ./build.sh clean --workspace
-  sudo ./build.sh clean --all
+  ./build.sh build x1q
+  ./build.sh b
+  ./build.sh clean --workspace
+  ./build.sh clean --all
 
-
-NOTE:
-  Root privileges are required for build and clean operations.
 
 EOF
 }
@@ -400,7 +400,5 @@ while [[ $# -gt 0 ]]; do
             ;;
     esac
 done
-
-[[ $EUID -ne 0 ]] && ERROR_EXIT "Root required"
 
 _BUILD_ROM

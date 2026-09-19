@@ -32,7 +32,7 @@ DEPENDENCY_CONFIG=(
     "jq|jq|jq for jq based usages|true"
     "ffmpeg|ffmpeg|ffmpeg for video compress and conversion|true"
     "webp|libwebp-utils|webp for compressing images|true"
-    "acl|acl|acl for granting regular user permissions|true"
+    "acl|acl|acl for granting regular user permissions (optional, rootless-safe)|false"
 )
 
 DETECTED_DISTRO_TYPE=""
@@ -138,8 +138,8 @@ CHECK_ALL_DEPENDENCIES()
     local ALL_PACKAGES_INSTALLED=true
     local PACKAGE_CONFIG_STRING PACKAGE_DISPLAY_NAME DEBIAN_PACKAGE_NAME ARCH_PACKAGE_NAME RESOLVED_PACKAGE_NAME IS_CRITICAL_PACKAGE
 
-    if [[ "$DETECTED_DISTRO_TYPE" == "debian" ]]; then
-        sudo apt-get update &>/dev/null
+    if [[ "$DETECTED_DISTRO_TYPE" == "debian" && "${EUID:-$(id -u)}" -eq 0 ]]; then
+        apt-get update &>/dev/null || sudo apt-get update &>/dev/null || true
     fi
 
     for PACKAGE_CONFIG_STRING in "${DEPENDENCY_CONFIG[@]}"; do
@@ -175,6 +175,17 @@ CHECK_DEPENDENCY()
         pacman -Q "$PACKAGE_NAME" &>/dev/null && return 0
     else
         dpkg -s "$PACKAGE_NAME" &>/dev/null && return 0
+    fi
+
+    # Rootless mode: never attempt privilege escalation. Tell the user
+    # exactly what to install instead of calling sudo.
+    if [[ "${EUID:-$(id -u)}" -ne 0 ]]; then
+        if [[ "$IS_CRITICAL_PACKAGE" == "true" ]]; then
+            ERROR_EXIT "Missing dependency: $PACKAGE_DISPLAY_NAME ($PACKAGE_NAME). Install it yourself (e.g. 'sudo apt-get install -y $PACKAGE_NAME') and re-run."
+        else
+            LOG_WARN "Missing optional dependency: $PACKAGE_DISPLAY_NAME ($PACKAGE_NAME). Install it yourself if needed."
+            return 1
+        fi
     fi
 
     LOG_BEGIN "Installing  $PACKAGE_DISPLAY_NAME..."

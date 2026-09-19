@@ -22,9 +22,13 @@ INIT_BUILD_ENV()
     STOCK_FW="${WORKDIR}/${STOCK_MODEL}"
     EXTRA_FW="${WORKDIR}/${EXTRA_MODEL}"
 
-    setfacl -R -m u:"${SUDO_USER:-$(whoami)}":rwx "$ASTROROM"
+    # Rootless-safe: ACLs are best-effort. Never fail the build when
+    # running as a regular user or when setfacl is unavailable.
+    if command -v setfacl &>/dev/null; then
+        setfacl -R -m u:"${SUDO_USER:-$(whoami)}":rwx "$ASTROROM" 2>/dev/null || true
 
-    setfacl -R -d -m u:"${SUDO_USER:-$(whoami)}":rwx "$ASTROROM"
+        setfacl -R -d -m u:"${SUDO_USER:-$(whoami)}":rwx "$ASTROROM" 2>/dev/null || true
+    fi
 
     EXTRACT_ROM || ERROR_EXIT "Firmware extraction failed."
 
@@ -76,7 +80,8 @@ CREATE_WORKSPACE()
     LINK_PARTITIONS "$SOURCE_FW" "$WORKSPACE" "$CONFIG_DIR" \
         "${CSC_PARTITIONS[@]}"
 
-    chown -R "$SUDO_USER:$SUDO_USER" "$WORKSPACE" 2>/dev/null
+    # Rootless-safe: chown is a no-op for the build user, ignore failures.
+    chown -R "$SUDO_USER:$SUDO_USER" "$WORKSPACE" 2>/dev/null || true
 
     cat > "$WORKSPACE_MARKER" <<EOF
 TIMESTAMP=$(date '+%Y-%m-%d %H:%M:%S')
